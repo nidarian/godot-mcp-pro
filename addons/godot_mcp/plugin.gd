@@ -214,6 +214,7 @@ func _inject_autoloads() -> void:
 	if not _manages_autoloads():
 		return
 	var previously_injected := _read_injected_marker()
+	var unmarked: Array[String] = []
 	var changed := false
 	for entry: Array in _MCP_AUTOLOADS:
 		var key: String = entry[0]
@@ -232,8 +233,11 @@ func _inject_autoloads() -> void:
 				# before _exit_tree ran. Reclaim it, or it stays in project.godot
 				# forever and logs "Can't autoload" once the addon is gone.
 				_session_injected_autoloads.append(key)
-			# Otherwise the project put it there itself (for example, it is
-			# committed to version control): leave it alone, as #17 promised.
+			else:
+				# Not added by this plugin: committed on purpose (leave it alone,
+				# as #17 promised), or left by a crash whose marker is gone (for
+				# example the .godot folder was deleted). Keep it, but say so.
+				unmarked.append(key)
 		else:
 			# A different script owns this name. Injecting would clobber the
 			# project's own autoload, and not injecting leaves the matching
@@ -243,6 +247,12 @@ func _inject_autoloads() -> void:
 					key, existing, script.get_file()
 				]
 			)
+	if not unmarked.is_empty():
+		push_warning(
+			"[MCP] project.godot already has MCP autoload(s) this plugin did not add: %s. They are left alone. If they are leftovers from a crashed session, remove them from project.godot. If your project commits them on purpose, set %s = false to silence this message." % [
+				", ".join(unmarked), _MANAGE_AUTOLOADS_SETTING
+			]
+		)
 	_write_injected_marker(_session_injected_autoloads)
 	if changed:
 		ProjectSettings.save()
